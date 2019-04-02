@@ -1,0 +1,207 @@
+---
+title: "Project 2"
+author: "Allen Ansari, Yongjun Chu, Solange Garcia de Alford"
+date: "March 29, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+## Required Packages
+``` {r}
+library(dplyr)
+library(ggplot2)
+library(Amelia)
+library(MASS)
+library(plyr)
+library(caTools)
+```
+
+## Importing Data Set
+```{r }
+setwd("E:/University/Applied Statistics/Project2_2")
+# Importing training dataset
+TrainShot <- read.csv("project2Data.csv")
+
+# importing test dataset
+TestShot <- read.csv("project2Pred.csv")
+
+#Changing Shot_Flag_Made as categorical factor
+TrainShot$shot_made_flag <- as.factor(TrainShot$shot_made_flag)
+TrainShot$playoffs <- as.factor(TrainShot$playoffs)
+TestShot$shot_made_flag <- as.factor(TestShot$shot_made_flag)
+TestShot$playoffs <- as.factor(TestShot$playoffs)
+
+HomeIndex <- grep("vs",TrainShot$matchup)
+AwayIndex <- grep("@",TrainShot$matchup)
+
+TrainShot$matchup <- as.character(TrainShot$matchup)
+
+for (i in HomeIndex){
+  TrainShot[i,"matchup"] <- "Home"
+}
+for (i in AwayIndex){
+  TrainShot[i,"matchup"] <- "Away"
+}
+TrainShot$matchup <- as.factor(TrainShot$matchup)
+
+TrainShot$game_date <- as.Date(TrainShot$game_date,format="%m/%d/%Y")
+#TrainShot$game_date <- as.factor(TrainShot$game_date)
+
+# group Action_type by "Dunk","Layup","Tip" shots
+
+#TrainShot$combined_shot_type <- revalue(TrainShot$combined_shot_type ,c("Dunk"="Short Shot","Layup"="Short Shot","Tip Shot"="Short Shot"))
+#levels(TrainShot$action_type)[c(1,2,3,5,6,12,13,14,15,18,21,27,30,31,32,33,34,35,37,38,42,43,44,45,46,47,49,50)]<-"Short Shot"
+
+#TestShot$combined_shot_type <- revalue(TestShot$combined_shot_type ,c("Dunk"="Short Shot","Layup"="Short Shot","Tip Shot"="Short Shot"))
+#levels(TestShot$action_type)[c(1,2,3,5,6,12,13,14,15,18,21,27,30,31,32,33,34,35,37,38,42,43,44,45,46,47,49,50)]<-"Short Shot"
+
+
+```
+
+## EDA
+
+```{r}
+#a plot to see accuracy by feature
+pplot <- function(Feature) {
+    Feature <- substitute(Feature)
+    ggplot(data = TrainShot, aes_q(x = Feature)) +
+        geom_bar(aes(fill = shot_made_flag), stat = "count", position = "fill") +
+    scale_fill_brewer(palette = "Set1", direction = -1) +
+     ggtitle(paste("accuracy by", Feature))
+
+}
+
+# a plot to see position by feature
+courtplot <- function(Feature) {
+        Feature <- substitute(Feature)
+        TrainShot %>% 
+    ggplot(aes(x = lon, y = lat)) +
+        geom_point(aes_q(color = Feature), alpha = 0.7, size = 3) +
+        ylim(c(33.7, 34.0883)) +
+        scale_color_brewer(palette = "Set1") +
+        theme_void() +
+        ggtitle(paste(Feature))
+}
+
+ggplot(TrainShot, aes(x = loc_x, y = loc_y)) +
+   geom_point(aes(color = shot_made_flag), alpha = 0.5, size = 0.5) +
+    ylim(c(-50, 400)) +
+   theme_void() +
+   scale_color_brewer(palette = "Set1") +
+   facet_grid(~ shot_made_flag) +
+    labs(title = "Shots Made(Blue) vs. Shots Missed(Red)")
+
+TrainShot %>% ggplot( aes(x = shot_type)) +
+        geom_bar(aes(fill = shot_made_flag), stat = "count", position = "fill") +
+    scale_fill_brewer(palette = "Set1", direction = -1) +
+     ggtitle(paste("accuracy by", "shot_type"))
+
+# locations for the various shot_types
+ggplot() +
+    geom_point(data = filter(TrainShot, combined_shot_type == "Jump Shot"),
+               aes(x = lon, y = lat), color = "grey", alpha = 0.3, size = 2) +
+    geom_point(data = filter(TrainShot, combined_shot_type != "Jump Shot"),
+                   aes(x = lon, y = lat, 
+                       color = combined_shot_type), alpha = 0.7, size = 3) +
+    ylim(c(33.7, 34.0883)) +
+    scale_color_brewer(palette = "Set1") +
+    theme_void() +
+    ggtitle("Shot Types")
+
+courtplot(shot_zone_area)
+courtplot(shot_zone_basic)
+courtplot(shot_zone_range)
+pplot(minutes_remaining)
+pplot(minutes_remaining)
+pplot(seconds_remaining)
+pplot(shot_distance) + xlim(0, 60)
+```
+
+# Split TarinShot into training and test data set
+```{r}
+#removing unusfull variables
+TrainShot <- subset(TrainShot,select = -c(1,5,7,8,21,22))
+TestShot <- subset(TestShot ,select = -c(1,5,7,8,21,22))
+set.seed(101)
+
+split = sample.split(TrainShot$shot_made_flag, SplitRatio = 0.70)
+
+Trainingset = subset(TrainShot, split == TRUE)
+TestSet = subset(TrainShot, split == FALSE)
+
+```
+
+# Model Selection
+```{r}
+# fit Full Model
+FullModel <- glm(shot_made_flag ~  ., data = Trainingset, family = binomial)
+# Setp Model
+StepModel <- stepAIC(FullModel,trace = FALSE)
+# compare full model with setpwise model
+StepModel$anova
+# Forward Model
+ForwardModel <- stepAIC(FullModel, direction = "forward", trace = FALSE)
+# Compare full model with forward model
+ForwardModel$anova
+# Backward Model
+BackModel <- stepAIC(FullModel, direction = "backward", trace = FALSE)
+# Compare full model with backward model
+BackModel$anova
+
+```
+
+# Prediction
+```{r}
+# Predict shot_made_flag using full model
+Predict_Full <- predict(FullModel,newdata=TestSet,type='response')
+# Predict shot_made_flag using stepwise model
+Predict_Step <- predict(StepModel,newdata=TestSet,type='response')
+# Predict shot_made_flag using Forward model
+Predict_Forward <- predict(ForwardModel,newdata=TestSet,type='response')
+# Predict shot_made_flag using backward model
+Predict_Back <- predict(BackModel,newdata=TestSet,type='response')
+
+Results_Full <- ifelse(Predict_Full > 0.5,1,0)
+
+Results_Step <- ifelse(Predict_Step > 0.5,1,0)
+
+Results_Forward <- ifelse(Predict_Forward > 0.5,1,0)
+
+Results_Back <- ifelse(Predict_Back > 0.5,1,0)
+
+# Calculating Accuracy for full model
+misClasificError_Full <- mean(Results_Full != TestSet$shot_made_flag)
+print(paste('Accuracy',1-misClasificError_Full))
+
+# Calculating Accuracy for stepwise model
+misClasificError_Step <- mean(Results_Step != TestSet$shot_made_flag)
+print(paste('Accuracy',1-misClasificError_Step))
+
+# Calculating Accuracy for forward model
+misClasificError_Forward <- mean(Results_Forward != TestSet$shot_made_flag)
+print(paste('Accuracy',1-misClasificError_Forward))
+
+# Calculating Accuracy for backward model
+misClasificError_Back <- mean(Results_Back != TestSet$shot_made_flag)
+print(paste('Accuracy',1-misClasificError_Back))
+
+# Confiusion Matrix for full model
+table(TestSet$shot_made_flag, Predict_Full > 0.5)
+
+# Confiusion Matrix for stepwise model
+table(TestSet$shot_made_flag, Predict_Step > 0.5)
+
+# Confiusion Matrix for forward model
+table(TestSet$shot_made_flag, Predict_Forward > 0.5)
+
+# Confiusion Matrix for backward model
+table(TestSet$shot_made_flag, Predict_Back > 0.5)
+
+```
