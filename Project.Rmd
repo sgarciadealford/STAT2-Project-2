@@ -25,7 +25,7 @@ library(caTools)
 
 ## Importing Data Set
 ```{r }
-setwd("E:/University/Applied Statistics/Project2_2")
+setwd("E:/University/Applied Statistics/Project2_2/STAT2-Project-2")
 # Importing training dataset
 TrainShot <- read.csv("project2Data.csv")
 
@@ -52,17 +52,22 @@ for (i in AwayIndex){
 TrainShot$matchup <- as.factor(TrainShot$matchup)
 
 TrainShot$game_date <- as.Date(TrainShot$game_date,format="%m/%d/%Y")
-#TrainShot$game_date <- as.factor(TrainShot$game_date)
 
-# group Action_type by "Dunk","Layup","Tip" shots
+# Training data cleaning
+HomeIndex_test <- grep("vs",TestShot$matchup)
+AwayIndex_test <- grep("@",TestShot$matchup)
 
-#TrainShot$combined_shot_type <- revalue(TrainShot$combined_shot_type ,c("Dunk"="Short Shot","Layup"="Short Shot","Tip Shot"="Short Shot"))
-#levels(TrainShot$action_type)[c(1,2,3,5,6,12,13,14,15,18,21,27,30,31,32,33,34,35,37,38,42,43,44,45,46,47,49,50)]<-"Short Shot"
+TestShot$matchup <- as.character(TestShot$matchup)
 
-#TestShot$combined_shot_type <- revalue(TestShot$combined_shot_type ,c("Dunk"="Short Shot","Layup"="Short Shot","Tip Shot"="Short Shot"))
-#levels(TestShot$action_type)[c(1,2,3,5,6,12,13,14,15,18,21,27,30,31,32,33,34,35,37,38,42,43,44,45,46,47,49,50)]<-"Short Shot"
+for (i in HomeIndex_test){
+  TestShot[i,"matchup"] <- "Home"
+}
+for (i in AwayIndex_test){
+  TestShot[i,"matchup"] <- "Away"
+}
+TestShot$matchup <- as.factor(TestShot$matchup)
 
-
+TestShot$game_date <- as.Date(TestShot$game_date,format="%m/%d/%Y")
 ```
 
 ## EDA
@@ -131,6 +136,7 @@ TrainShot <- subset(TrainShot,select = -c(1,5,7,8,21,22))
 TestShot <- subset(TestShot ,select = -c(1,5,7,8,21,22))
 set.seed(101)
 
+# creating training and test data set
 split = sample.split(TrainShot$shot_made_flag, SplitRatio = 0.70)
 
 Trainingset = subset(TrainShot, split == TRUE)
@@ -142,18 +148,22 @@ TestSet = subset(TrainShot, split == FALSE)
 ```{r}
 # fit Full Model
 FullModel <- glm(shot_made_flag ~  ., data = Trainingset, family = binomial)
+summary(FullModel)
 # Setp Model
 StepModel <- stepAIC(FullModel,trace = FALSE)
 # compare full model with setpwise model
 StepModel$anova
+summary(StepModel)
 # Forward Model
 ForwardModel <- stepAIC(FullModel, direction = "forward", trace = FALSE)
 # Compare full model with forward model
 ForwardModel$anova
+summary(ForwardModel)
 # Backward Model
 BackModel <- stepAIC(FullModel, direction = "backward", trace = FALSE)
 # Compare full model with backward model
 BackModel$anova
+summary(BackModel)
 
 ```
 
@@ -205,3 +215,21 @@ table(TestSet$shot_made_flag, Predict_Forward > 0.5)
 table(TestSet$shot_made_flag, Predict_Back > 0.5)
 
 ```
+
+# final model and export predicted values using logistic regrission on all Trainning Observation
+```{r}
+FullModel_Train <- glm(shot_made_flag ~  ., data = TrainShot, family = binomial)
+Predict_Forward <- predict(ForwardModel,newdata=TestShot,type='response')
+TestShot$shot_made_flag_logistic <- ifelse(Predict_Forward > 0.5,1,0)
+
+```
+
+# LDA Model
+```{r}
+
+LDAFullMOdel <- lda(shot_made_flag ~  ., data = TrainShot)
+Predict_LDA <- predict(LDAFullMOdel,newdata=TestShot)$class
+TestShot$shot_made_flag_LDA <- Predict_LDA
+write.csv(TestShot,"PredDataFinal.csv")
+```
+
